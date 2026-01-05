@@ -1,344 +1,59 @@
-<!doctype html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Today Todo</title>
-  <style>
-    :root{
-      --bg1:#0b1020;
-      --bg2:#1a0f2e;
-      --card: rgba(255,255,255,.08);
-      --stroke: rgba(255,255,255,.14);
-      --text: rgba(255,255,255,.92);
-      --muted: rgba(255,255,255,.62);
-      --shadow: 0 18px 60px rgba(0,0,0,.35);
-      --radius: 20px;
+<div>Teachable Machine Image Model</div>
+<button type="button" onclick="init()">Start</button>
+<div id="webcam-container"></div>
+<div id="label-container"></div>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+<script type="text/javascript">
+    // More API functions here:
+    // https://github.com/googlecreativelab/teachablemachine-community/tree/master/libraries/image
+
+    // the link to your model provided by Teachable Machine export panel
+    const URL = "./my_model/";
+
+    let model, webcam, labelContainer, maxPredictions;
+
+    // Load the image model and setup the webcam
+    async function init() {
+        const modelURL = URL + "model.json";
+        const metadataURL = URL + "metadata.json";
+
+        // load the model and metadata
+        // Refer to tmImage.loadFromFiles() in the API to support files from a file picker
+        // or files from your local hard drive
+        // Note: the pose library adds "tmImage" object to your window (window.tmImage)
+        model = await tmImage.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
+
+        // Convenience function to setup a webcam
+        const flip = true; // whether to flip the webcam
+        webcam = new tmImage.Webcam(200, 200, flip); // width, height, flip
+        await webcam.setup(); // request access to the webcam
+        await webcam.play();
+        window.requestAnimationFrame(loop);
+
+        // append elements to the DOM
+        document.getElementById("webcam-container").appendChild(webcam.canvas);
+        labelContainer = document.getElementById("label-container");
+        for (let i = 0; i < maxPredictions; i++) { // and class labels
+            labelContainer.appendChild(document.createElement("div"));
+        }
     }
 
-    *{ box-sizing:border-box; }
-    html,body{ height:100%; }
-    body{
-      margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", Arial, "Apple SD Gothic Neo", sans-serif;
-      color: var(--text);
-      background:
-        radial-gradient(1200px 600px at 10% 10%, rgba(124, 92, 255, .35), transparent 55%),
-        radial-gradient(900px 500px at 90% 20%, rgba(0, 209, 255, .28), transparent 55%),
-        radial-gradient(900px 700px at 50% 95%, rgba(255, 80, 180, .22), transparent 60%),
-        linear-gradient(140deg, var(--bg1), var(--bg2));
-      overflow-x:hidden;
+    async function loop() {
+        webcam.update(); // update the webcam frame
+        await predict();
+        window.requestAnimationFrame(loop);
     }
 
-    .wrap{
-      min-height:100%;
-      display:grid;
-      place-items:center;
-      padding: 48px 16px;
+    // run the webcam image through the image model
+    async function predict() {
+        // predict can take in an image, video or canvas html element
+        const prediction = await model.predict(webcam.canvas);
+        for (let i = 0; i < maxPredictions; i++) {
+            const classPrediction =
+                prediction[i].className + ": " + prediction[i].probability.toFixed(2);
+            labelContainer.childNodes[i].innerHTML = classPrediction;
+        }
     }
-
-    .card{
-      width: min(720px, 100%);
-      background: var(--card);
-      border: 1px solid var(--stroke);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      position: relative;
-      overflow:hidden;
-    }
-
-    .card::before{
-      content:"";
-      position:absolute;
-      inset:-2px;
-      background: linear-gradient(120deg, rgba(124,92,255,.55), rgba(0,209,255,.45), rgba(255,80,180,.38));
-      filter: blur(20px);
-      opacity:.22;
-      z-index:0;
-    }
-
-    .inner{
-      position: relative;
-      z-index:1;
-      padding: 28px 24px 20px;
-    }
-
-    header{
-      display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
-      gap: 14px;
-      margin-bottom: 18px;
-    }
-
-    .title{
-      display:flex;
-      flex-direction:column;
-      gap:6px;
-    }
-
-    h1{
-      margin:0;
-      font-size: 22px;
-      letter-spacing: -.2px;
-      line-height:1.2;
-    }
-    .sub{
-      margin:0;
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .pill{
-      font-size:12px;
-      color: rgba(255,255,255,.78);
-      padding: 8px 10px;
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,.14);
-      background: rgba(255,255,255,.06);
-      user-select:none;
-      white-space:nowrap;
-    }
-
-    .composer{
-      display:flex;
-      gap: 10px;
-      margin: 16px 0 14px;
-    }
-
-    .input{
-      flex:1;
-      display:flex;
-      align-items:center;
-      gap:10px;
-      padding: 12px 14px;
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.18);
-      outline: none;
-      transition: border-color .2s ease, box-shadow .2s ease;
-    }
-    .input:focus-within{
-      border-color: rgba(0,209,255,.45);
-      box-shadow: 0 0 0 4px rgba(0,209,255,.12);
-    }
-
-    .input input{
-      width:100%;
-      border:0;
-      outline:0;
-      background: transparent;
-      color: var(--text);
-      font-size: 14px;
-    }
-    .input input::placeholder{ color: rgba(255,255,255,.45); }
-
-    .btn{
-      border:0;
-      cursor:pointer;
-      padding: 12px 14px;
-      border-radius: 14px;
-      color: rgba(255,255,255,.92);
-      font-weight: 600;
-      letter-spacing: -.1px;
-      background: linear-gradient(120deg, rgba(124,92,255,.95), rgba(0,209,255,.85));
-      box-shadow: 0 10px 30px rgba(0,209,255,.12);
-      transition: transform .08s ease, filter .2s ease;
-      white-space:nowrap;
-    }
-    .btn:active{ transform: translateY(1px) scale(.99); }
-    .btn:hover{ filter: brightness(1.03); }
-
-    .toolbar{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap: 10px;
-      margin: 10px 0 6px;
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    .clear{
-      border:0;
-      cursor:pointer;
-      color: rgba(255,255,255,.75);
-      background: transparent;
-      padding: 8px 10px;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,.12);
-      transition: background .2s ease, border-color .2s ease;
-    }
-    .clear:hover{
-      background: rgba(255,255,255,.06);
-      border-color: rgba(255,255,255,.2);
-    }
-
-    ul{
-      list-style:none;
-      padding: 0;
-      margin: 12px 0 0;
-      display:flex;
-      flex-direction:column;
-      gap: 10px;
-    }
-
-    .item{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap: 12px;
-      padding: 12px 12px;
-      border-radius: 16px;
-      border: 1px solid rgba(255,255,255,.12);
-      background: rgba(0,0,0,.18);
-      transition: transform .18s ease, opacity .18s ease, filter .18s ease;
-    }
-
-    .left{
-      display:flex;
-      align-items:center;
-      gap: 12px;
-      min-width:0;
-    }
-
-    .check{
-      width: 18px;
-      height: 18px;
-      border-radius: 6px;
-      border: 1px solid rgba(255,255,255,.25);
-      background: rgba(255,255,255,.06);
-      display:grid;
-      place-items:center;
-      flex: 0 0 auto;
-    }
-
-    .check input{
-      appearance:none;
-      width:100%;
-      height:100%;
-      margin:0;
-      cursor:pointer;
-      border-radius: 6px;
-      position:relative;
-      outline:none;
-    }
-
-    .check input:checked{
-      background: linear-gradient(120deg, rgba(255,80,180,.9), rgba(124,92,255,.9));
-      border: 1px solid rgba(255,255,255,.22);
-    }
-    .check input:checked::after{
-      content:"";
-      position:absolute;
-      inset: 0;
-      background:
-        radial-gradient(circle at 40% 40%, rgba(255,255,255,.9), transparent 50%);
-      opacity:.25;
-      border-radius: 6px;
-    }
-
-    .text{
-      min-width:0;
-      display:flex;
-      flex-direction:column;
-      gap: 2px;
-    }
-
-    .task{
-      margin:0;
-      font-size: 14px;
-      line-height: 1.2;
-      word-break:break-word;
-    }
-
-    .meta{
-      margin:0;
-      font-size: 11px;
-      color: rgba(255,255,255,.5);
-    }
-
-    .remove{
-      border:0;
-      cursor:pointer;
-      color: rgba(255,255,255,.65);
-      background: rgba(255,255,255,.06);
-      border: 1px solid rgba(255,255,255,.12);
-      padding: 8px 10px;
-      border-radius: 12px;
-      transition: background .2s ease, border-color .2s ease, transform .08s ease;
-      flex: 0 0 auto;
-    }
-    .remove:hover{
-      background: rgba(255,255,255,.08);
-      border-color: rgba(255,255,255,.2);
-    }
-    .remove:active{ transform: translateY(1px); }
-
-    .item.done{
-      opacity: 0;
-      transform: translateY(-6px) scale(.99);
-      filter: blur(1px);
-      pointer-events:none;
-    }
-
-    .empty{
-      margin: 14px 0 6px;
-      padding: 14px 14px;
-      border-radius: 16px;
-      border: 1px dashed rgba(255,255,255,.18);
-      color: rgba(255,255,255,.6);
-      background: rgba(0,0,0,.10);
-      font-size: 13px;
-    }
-
-    footer{
-      margin-top: 14px;
-      padding-top: 14px;
-      border-top: 1px solid rgba(255,255,255,.10);
-      display:flex;
-      justify-content:space-between;
-      gap: 10px;
-      color: rgba(255,255,255,.55);
-      font-size: 12px;
-      flex-wrap:wrap;
-    }
-
-    .kbd{
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      font-size: 11px;
-      padding: 2px 6px;
-      border-radius: 8px;
-      border: 1px solid rgba(255,255,255,.14);
-      background: rgba(255,255,255,.06);
-      color: rgba(255,255,255,.78);
-    }
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <div class="card" role="application" aria-label="오늘의 할 일">
-      <div class="inner">
-        <header>
-          <div class="title">
-            <h1>오늘의 할 일</h1>
-            <p class="sub">체크하면 목록에서 사라집니다. 간단하고 빠르게.</p>
-          </div>
-          <div class="pill" id="todayPill"></div>
-        </header>
-
-        <div class="composer">
-          <div class="input" aria-label="할 일 입력">
-            <input id="taskInput" type="text" placeholder="예: 운동 30분, 메일 답장, 독서 20페이지" autocomplete="off" />
-          </div>
-          <button class="btn" id="addBtn" type="button">추가</button>
-        </div>
-
-        <div class="toolbar">
-          <div>남은 할 일: <span id="count">0</span></div>
-          <button class="clear" id="clearAll" type="button">전체 삭제</button>
-        </div>
-
-        <div id="emptyState" class="empty" hidden>
+</script>
